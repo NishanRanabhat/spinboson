@@ -12,7 +12,6 @@ abstract type TensorNetwork{T} end
 # Functions can be written to accept any TensorNetwork,
 # so you can dispatch on e.g. f(x::TensorNetwork) for generic behavior.
 
-
 """
 An MPS is a sequence of rank-3 tensors of element-type `T`.
 """
