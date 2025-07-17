@@ -26,12 +26,10 @@ end
 """
 creates the FSM for two site interaction term
 """
-
 function build_fsm1(coupling_terms::Vector{Tuple{Int,String,String,Float64}})
     num_states = 1                 
     transitions = Tuple{Int,Int,String,Float64}[] 
     nodes = 2 + sum([couplings[i][1] for i in 1:length(couplings)])
-    println(nodes)
     for (dx, op1, op2, w) in coupling_terms
         path = num_states+1:(num_states + dx)
         num_states += dx 
@@ -55,6 +53,12 @@ function init_grids(chi::Int, d::Int, L::Int)
     return zeros(Float64, chi, chi, d, d, L)
 end
 
+# 2. Initialize empty grids
+function init_grids1(chi::Int, d::Int,T::Type=Float64)
+    # 4D: (χ_in, χ_out, phys_in, phys_out)
+    return zeros(T, chi, chi, d, d)
+end
+
 # 3. Populate grids from FSM transitions
 function populate_grids!(
     grids::Array{Float64,5},
@@ -69,6 +73,21 @@ function populate_grids!(
         end
     end
     return grids
+end
+
+function populate_grids1!(
+    grids::AbstractArray{G,4},
+    transitions::Vector{Tuple{Int,Int,String,W}},
+    phys_ops::Dict{String,Matrix},
+) where {G<:Number, W<:Number}
+
+    grids[1,1,:,:] = phys_ops["I"]
+    grids[lastindex(grids,1),lastindex(grids,2),:,:] = phys_ops["I"]
+    for (row,col,opname,w) in transitions 
+        op_mat = phys_ops[opname]
+        grids[row,col,:,:] = w*op_mat 
+    end 
+    return grids 
 end
 
 # 4. Assemble MPO tensors from grids
@@ -100,15 +119,26 @@ end
 
 # --- Example usage ---
 sx = [0.0 1.0; 1.0 0.0]
-sy = [0.0 -1.0; 1.0  0.0]
+sy = [0.0 -1.0*im; 1.0*im  0.0]
+sz = [1.0 0.0; 0.0  -1.0]
 I2 = Matrix{Float64}(I, 2, 2)
 
-couplings = [(1, "X", "X", 1.0), (3, "Z", "Z", 0.5)]
-ops = Dict("X"=>sx, "Y"=>sy, "I"=>I2)
-L = 10
+couplings = [(1, "X", "X", 1.0), (2, "Z", "Z", 0.5)]
+ops = Dict("X"=>sx, "Y"=>sy, "Z"=>sz,"I"=>I2)
 
-#println(sum([couplings[i][1] for i in 1:length(couplings)]))
+num_states, transitions = build_fsm1(couplings)
+chi = num_states + 1 
+d = 2
+grids = init_grids1(chi,d,Float64)
+mpo = populate_grids1!(grids,transitions,ops)
 
-fsm = build_fsm1(couplings)
-println(fsm)
+#grids[0,0,:,:] = sz
+#println(sz)
+
+#println(size(mpo))
+for i in 1:chi
+    for j in 1:chi 
+        println(i,",",j,",",mpo[i,j,:,:])
+    end 
+end
 #println("Built MPO with bond dim=$(size(mpo[1],1)), length=$L")
