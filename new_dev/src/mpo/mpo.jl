@@ -21,6 +21,52 @@ struct Fields
     weight::Float64
 end
 
+function power_law_to_exp(a::Float64,n::Integer,N::Integer)
+
+    """
+
+    function gives (x_i,lambda_i) such that
+
+    1/r^a = Sum_{i=1-->n} x_i * (lambda_i)^r + errors
+
+    a : interaction strength, a -> infinity is nearest neighbor Ising
+        a -> 0 is fully connected Ising.
+
+    n : number of exponential sums. Refer to SciPostPhys.12.4.126 appendix C
+        for further details.
+
+    N : lattice size.
+    """
+
+    F = Array{Float64,1}(undef,N)
+    @inbounds for k in 1:N
+        F[k] = 1/k^a
+    end
+
+    M = zeros(N-n+1,n)
+    @inbounds for j in 1:n
+        @inbounds for i in 1:N-n+1
+            M[i,j] = F[i+j-1]
+        end
+    end
+
+    F1 = qr(M)
+    Q1 = F1.Q[1:N-n,1:n]
+    Q1_inv = pinv(Q1)
+    Q2 = F1.Q[2:N-n+1,1:n]
+    V = Q1_inv*Q2
+
+    lambda = real(eigvals(V))
+    lam_mat = zeros(N,n)
+    @inbounds for i in 1:length(lambda)
+        @inbounds for k in 1:N
+            lam_mat[k,i] = lambda[i]^k
+        end
+    end
+    x = lam_mat\F
+    return x, lambda
+end
+
 function spin_finite_state_machine(channels)
     #start the finite state machine
     num_states = 1
@@ -56,7 +102,7 @@ function two_site_finite_path(num_states::Int,coupling::FiniteRangeCoupling,tran
     # last state → final idle : emit op2
     push!(transitions, (0,path[end], coupling.op2,coupling.weight))
 
-    return num_states+coupling.dx, transitions
+    return path[end], transitions
 end
 
 function two_site_exp_channel_path(num_states::Int,coupling::ExpChannelCoupling,transitions::Vector{Tuple{Int64, Int64, String, Float64}})
@@ -71,14 +117,14 @@ function two_site_exp_channel_path(num_states::Int,coupling::ExpChannelCoupling,
     # last state → final idle : emit op2
     push!(transitions, (0,path, coupling.op2,coupling.amplitude*coupling.decay))   
 
-    return num_states+1, transitions
+    return path, transitions
 end 
 
-function single_site_field_path(coupling::Fields,transitions::Vector{Tuple{Int64, Int64, String, Float64}})
+function single_site_field_path(num_states::Int,coupling::Fields,transitions::Vector{Tuple{Int64, Int64, String, Float64}})
 
     push!(transitions(0,1,coupling.op,coupling.weight))
 
-    return transitions
+    return num_states, transitions
 end 
 
 # 2. Initialize empty grids
