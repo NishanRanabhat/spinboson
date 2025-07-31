@@ -83,7 +83,7 @@ function spin_finite_state_machine(channels)
         elseif ch isa ExpChannelCoupling
             num_states,transitions = two_site_exp_channel_path(num_states,ch,transitions)
         elseif ch isa Fields
-            transitions = single_site_field_path(ch,transitions)
+            num_states,transitions = single_site_field_path(num_states,ch,transitions)
         end 
     end 
     return num_states+1, transitions 
@@ -121,8 +121,7 @@ function two_site_exp_channel_path(num_states::Int,coupling::ExpChannelCoupling,
 end 
 
 function single_site_field_path(num_states::Int,coupling::Fields,transitions::Vector{Tuple{Int64, Int64, String, Float64}})
-
-    push!(transitions(0,1,coupling.op,coupling.weight))
+    push!(transitions,(0,1,coupling.op,coupling.weight))
 
     return num_states, transitions
 end 
@@ -153,7 +152,7 @@ sy = [0.0 -1.0*im; 1.0*im  0.0]
 sz = [1.0 0.0; 0.0  -1.0]
 I2 = Matrix{Float64}(I, 2, 2)
 
-channels = [FiniteRangeCoupling("X", "X", 1 ,0.5),FiniteRangeCoupling("Z", "Z", 2,0.5)]
+channels = [FiniteRangeCoupling("X", "X", 2,0.5),ExpChannelCoupling("Z", "Z",0.8, 0.5),Fields("Y",0.8)]
 ops = Dict("X"=>sx, "Y"=>sy, "Z"=>sz,"I"=>I2)
 chi, transitions = spin_finite_state_machine(channels)
 println(transitions)
@@ -169,6 +168,7 @@ println(transitions)
 #    ExpChannelCoupling("Z", "Z",0.8, 0.5),
 #    ExpChannelCoupling("Z", "Z",0.8, 0.5),
 #    ExpChannelCoupling("Z", "Z",0.8, 0.5),
+#    Fields("Y",0.8)
 #]
 
 
