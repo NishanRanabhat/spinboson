@@ -230,6 +230,32 @@ function build_path(ns::Int,coupling::BosonOnlySB,transitions::Vector{Tuple{Int6
 end
 
 # ──────────────────────────────────────────────────────────────────────────────
+# 6) FSMPath wrappers
+# ──────────────────────────────────────────────────────────────────────────────
+
+abstract type FSMPath end
+
+"""
+    SpinFSMPath(χ, transitions)
+
+Result of `spin_FSM`: χ (bond dimension) and the pure-spin transitions.
+"""
+struct SpinFSMPath <: FSMPath
+    chi::Int
+    transitions::Vector{Tuple{Int,Int,String,Float64}}
+end
+
+"""
+    SpinBosonFSMPath(χ, transitions)
+
+Result of `spinboson_FSM`: χ (bond dimension) and the spin-boson transitions.
+"""
+struct SpinBosonFSMPath <: FSMPath
+    chi::Int
+    transitions::Vector{Tuple{Int,Int,String,Float64}}
+end
+
+# ──────────────────────────────────────────────────────────────────────────────
 # 6) Finite state Machine builder from paths
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -247,7 +273,7 @@ function spin_FSM(channels::Vector{<:Channel})
     for ch in channels
         ns, transitions = build_path(ns, ch, transitions)
     end
-    return ns+1, transitions
+    return SpinFSMPath(ns+1, transitions)
 end
 
 function spinboson_FSM(channels::Vector{<:Channel})
@@ -262,22 +288,5 @@ function spinboson_FSM(channels::Vector{<:Channel})
     for ch in channels
         ns, transitions = build_path(ns,ch,transitions)
     end 
-    return ns+1, transitions 
+    return SpinBosonFSMPath(ns+1, transitions) 
 end
-
-# --- Example usage ---
-sx = [0.0 1.0; 1.0 0.0]
-sy = [0.0 -1.0*im; 1.0*im  0.0]
-sz = [1.0 0.0; 0.0  -1.0]
-I2 = Matrix{Float64}(I, 2, 2)
-
-#need to fix the definition of struct
-#channels = [FiniteRangeCoupling("X", "X", 2,0.5),ExpChannelCoupling("Z", "Z",0.8, 0.5),Field("Y",0.8)]
-spin1 = FiniteRangeCoupling("X","X",2,0.5)
-spin2 = ExpChannelCoupling("Z","Z",0.8,0.5)
-spin3 = Field("Y",0.8)
-channels = [FiniteRangeCouplingSB(spin1,"Ib",1.0),ExpChannelCouplingSB(spin2,"Ib'",1.0),FieldSB(spin3,"a",2.0),BosonOnlySB("n",5.0)]
-
-#ops = Dict("X"=>sx, "Y"=>sy, "Z"=>sz,"I"=>I2)
-chi, transitions = spinboson_FSM(channels)
-println(transitions)

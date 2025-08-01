@@ -1,174 +1,168 @@
-using LinearAlgebra
+using LinearAlgebra 
 
-# 1) A tiny abstract hierarchy
-abstract type Channel end
-abstract type TwoSite   <: Channel end
-abstract type SingleSite<: Channel end
+include(joinpath(@__DIR__, "fsm.jl"))
 
-#Pure spin Structs
+function spin_ops(d::Integer)
+    @assert d ≥ 1 "d must be ≥ 1"
+    # total spin S and its m‐values
+    S = (d - 1)/2
+    m_vals = collect(S:-1:-S)   # [S, S-1, …, -S]
 
-# Finite‑range coupling between i and i+dx
-struct FiniteRangeCoupling <: TwoSite
-    op1::String
-    op2::String
-    dx::Int
-    weight::Float64
+    # Sz is just diagonal of m_vals
+    Sz = Diagonal(m_vals)
+
+    # Build S+ and S– by placing coef on the super/sub‐diagonal
+    Sp = zeros(Float64, d, d)
+    @inbounds for i in 1:d-1
+        m_lower = m_vals[i+1]   # THIS is the m of the state being raised
+        coef = sqrt((S - m_lower)*(S + m_lower + 1))
+        Sp[i, i+1] = coef
+    end
+    Sm = Sp'  # adjoint
+
+    # Now the cartesian components
+    Sx = (Sp + Sm)/2
+    Sy = (Sp - Sm) / (2im)
+
+    return Dict("X" => Sx,
+                "Y" => Sy, 
+                "Z" => Sz, 
+                "I" => Matrix{Float64}(I, d, d))
 end
 
-# Exponential coupling between two spins at r distance : A*e^{-b r} == amplitude*decay^r coupling
-struct ExpChannelCoupling <: TwoSite
-    op1::String
-    op2::String
-    amplitude::Float64
-    decay::Float64
+function boson_annihilator(nmax::Integer)
+    @assert nmax ≥ 0 "nmax must be non-negative"
+    dB = nmax + 1
+    A = zeros(Float64, dB, dB)
+    @inbounds for k in 1:nmax                 # super-diagonal entries
+        A[k, k+1] = sqrt(k)              # √k = √(n) with n=k
+    end
+    return A
 end
 
-#single site field 
-struct Field <: SingleSite
-    op::String
-    weight::Float64
+function boson_identity(nmax::Integer)
+    dB = nmax + 1
+    I = zeros(Float64, dB, dB)          # or zeros(n,n) if Float64 is fine
+    @inbounds for k in 1:dB                    # i ↔ n in the formula above
+        I[k, k] = 1.0          # diagonal entry
+    end
+    return I
 end 
 
-#Spin-Boson Structs, all the spin degrees of freedom are coupled with a single Boson 
-
-# Finite‑range coupling between spins at i and i+dx
-struct FiniteRangeCouplingSB <: TwoSite
-    op1::String
-    op2::String
-    boson_op::String
-    dx::Int
-    weight_spin::Float64
-    weight_spinboson::Float64
+function boson_ops(nmax::Integer)
+    a    = boson_annihilator(nmax)
+    adag = a'
+    return Dict(
+      "a"    => a,
+      "adag" => adag,
+      "n"    => adag * a,
+      "Ib"   => boson_identity(nmax),
+    )
 end
 
-# Exponential coupling between two spins at r distance : A*e^{-b r} == amplitude*decay^r coupling
-struct ExpChannelCouplingSB <: TwoSite
-    op1::String
-    op2::String
-    boson_op::String
-    amplitude::Float64
-    decay::Float64
-    weight_spinboson::Float64
+# Your MPO type from before
+abstract type TensorNetwork{T} end
+struct MPO{T} <: TensorNetwork{T}
+    tensors::Vector{Array{T,4}}
 end
 
-#single site field 
-struct FieldSB <: SingleSite
-    op::String
-    boson_op::String
-    weight_spin::Float64
-    weight_spinboson::Float64
+# ————————————————————————————————————————————————————————————————
+# 1) Pure-spin MPO, now takes `N` sites
+# ————————————————————————————————————————————————————————————————
+function build_mpo(
+    fsm::SpinFSMPath;
+    N::Integer,
+    d::Integer = 2,
+    T::Type   = Float64,
+)
+    # operator factory
+    phys_ops = spin_ops(d)
+    chi        = fsm.chi
+
+    # build the bulk
+    bulk = zeros(T, chi, chi, d, d)
+    for (row,col,opname,w) in fsm.transitions 
+        op_mat = phys_ops[opname]
+        bulk[row==0 ? chi : row,col == 0 ? chi : col,:,:] += w*op_mat 
+    end 
+
+    # left / right boundaries
+    L = reshape(bulk[chi, :, :, :], (1, chi, d, d))
+    R = reshape(bulk[:, 1, :, :], (chi, 1, d, d))
+
+    # assemble N‐site MPO: [L, bulk, bulk, …, bulk, R]
+    mids = fill(bulk, N-2)        # N-2 copies of the central tensor
+    tensors = [L, mids..., R]     # vector of length N
+
+    return MPO{T}(tensors)
 end
 
-#Boson only
-struct BosonOnlySB <: SingleSite
-    op::String
-    weight::Float64
+#build the mpo builder for spin boson
+function build_mpo(fsm::SpinBosonFSMPath;d::Integer=2,nmax::Integer=4,T::Type=Float64)
+    chi = fsm.chi
+    grid_bulk = zeros(T,chi-1,chi-1,d,d)
+    grid_L = zeros(T,1,chi-1,nmax+1,nmax+1)
+    phys_ops = merge(spin_ops(d),boson_ops(nmax))
+    for (row,col,opname,w) in fsm.transitions 
+        op_mat = phys_ops[opname]
+        if row == 0
+            grid_L[1,col,:,:] += w*op_mat
+        else
+            grid_bulk[row,col,:,:] += w*op_mat
+        end 
+    end
+    return grid_L, grid_bulk, reshape(grid_bulk[:,1,:,:],(chi-1,1,d,d))
 end
 
-
-function power_law_to_exp(a::Float64,n::Integer,N::Integer)
-
-    """
-    function gives (x_i,lambda_i) such that
-    1/r^a = Sum_{i=1-->n} x_i * (lambda_i)^r + errors
-    a : interaction strength, a -> infinity is nearest neighbor Ising
-        a -> 0 is fully connected Ising.
-    n : number of exponential sums. Refer to SciPostPhys.12.4.126 appendix C
-        for further details.
-    N : lattice size.
-    """
-
-    F = Array{Float64,1}(undef,N)
-    @inbounds for k in 1:N
-        F[k] = 1/k^a
+# ————————————————————————————————————————————————————————————————
+# 2) Spin-boson MPO,
+# ————————————————————————————————————————————————————————————————
+function build_mpo1(
+    fsm::SpinBosonFSMPath;
+    N::Integer,
+    d::Integer    = 2,
+    nmax::Integer = 4,
+    T::Type       = Float64,
+)
+    chi   = fsm.chi
+    db  = nmax + 1
+    phys_ops = merge(spin_ops(d), boson_ops(nmax))
+    # build the “bulk” and left boundary
+    bulk  = zeros(T, chi-1, chi-1, d, d)
+    L     = zeros(T, 1, chi-1, db, db)
+    for (row,col,opname,w) in fsm.transitions 
+        op_mat = phys_ops[opname]
+        if row == 0
+            L[1,col,:,:] .+= w*op_mat
+        else
+            bulk[row,col,:,:] .+= w*op_mat
+        end 
     end
 
-    M = zeros(N-n+1,n)
-    @inbounds for j in 1:n
-        @inbounds for i in 1:N-n+1
-            M[i,j] = F[i+j-1]
-        end
-    end
+    # right boundary
+    R = reshape(bulk[:, 1, :, :], (chi-1, 1, d, d))
 
-    F1 = qr(M)
-    Q1 = F1.Q[1:N-n,1:n]
-    Q1_inv = pinv(Q1)
-    Q2 = F1.Q[2:N-n+1,1:n]
-    V = Q1_inv*Q2
+    # assemble N‐site MPO
+    mids    = fill(bulk, N-2)
+    tensors = [L, mids..., R]
 
-    lambda = real(eigvals(V))
-    lam_mat = zeros(N,n)
-    @inbounds for i in 1:length(lambda)
-        @inbounds for k in 1:N
-            lam_mat[k,i] = lambda[i]^k
-        end
-    end
-    nu = lam_mat\F
-    return nu, lambda
+    return MPO{T}(tensors)
 end
 
-#builds finite state machine from different channels
-function spin_FSM(channels::Vector{<:Channel})
-    #start the finite state machine with 1 as first idle
-    ns = 1
-    #allocate a vector of tuples for hosting transitions
-    transitions = Tuple{Int,Int,String,Float64}[]
-    #put identity at first and final idle 
-    push!(transitions, (1,1,"I", 1.0))
-    push!(transitions, (0,0,"I", 1.0))
+spin1 = FiniteRangeCoupling("X", "X", 1,1.0)
+spin2 = ExpChannelCoupling("Z", "Z",0.8, 1.0)
+spin3 = Field("Z",1.0)
+spin4 = Field("X",1.0)
+channel_spin = [spin1,spin3]
+channel_boson = [FiniteRangeCouplingSB(spin1,"Ib",1.0),FieldSB(spin3,"a",1.0),BosonOnlySB("n",1.0)]
 
-    #loop over different coupling channels and build transitions
-    for ch in channels
-        ns, transitions = build_path(ns, ch, transitions)
-    end
-    return ns+1, transitions
-end
+fsm1 = spin_FSM(channel_spin)
+fsm2 = spinboson_FSM(channel_boson)
 
-# for finite‐range couplings
-function build_path(ns::Int, coupling::FiniteRangeCoupling,
-    transitions::Vector{Tuple{Int64, Int64, String, Float64}})
-    path = ns+1 : ns+coupling.dx
-    # idle → first state : emit op1
-    push!(transitions, (path[1], 1, coupling.op1, 1.0))
-    # intermediate identity hops
-    for i in 2:length(path)
-        push!(transitions, (path[i], path[i-1], "I", 1.0))
-    end
-    # last state → final idle : emit op2
-    push!(transitions, (0, path[end], coupling.op2, coupling.weight))
-    return path[end], transitions
-end
+L,M,R = build_mpo(fsm2,d=2,nmax=4)
 
-# for exponential couplings
-function build_path(ns::Int, coupling::ExpChannelCoupling,
-    transitions::Vector{Tuple{Int64, Int64, String, Float64}})
-    path = ns + 1
-    # idle → first state : emit op1
-    push!(transitions, (path, 1, coupling.op1,1.0))
-    # self‑loop with identity and decay 
-    push!(transitions, (path, path, "I", coupling.decay))
-    # last state → final idle : emit op2
-    push!(transitions, (0,    path, coupling.op2,
-            coupling.amplitude * coupling.decay))
-    return path, transitions
-end
+mpo = build_mpo1(fsm2,N=6,d=2,nmax=4)
 
-# for single‐site fields
-function build_path(ns::Int, coupling::Field,
-    transitions::Vector{Tuple{Int64, Int64, String, Float64}})
-    # first idle → last : emit op
-    push!(transitions, (0, 1, coupling.op, coupling.weight))
-    return ns, transitions
-end
 
-# --- Example usage ---
-sx = [0.0 1.0; 1.0 0.0]
-sy = [0.0 -1.0*im; 1.0*im  0.0]
-sz = [1.0 0.0; 0.0  -1.0]
-I2 = Matrix{Float64}(I, 2, 2)
 
-channels = [FiniteRangeCoupling("X", "X", 2,0.5),ExpChannelCoupling("Z", "Z",0.8, 0.5),Field("Y",0.8)]
-ops = Dict("X"=>sx, "Y"=>sy, "Z"=>sz,"I"=>I2)
-chi, transitions = spin_FSM(channels)
-println(transitions)
 
