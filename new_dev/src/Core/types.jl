@@ -1,6 +1,6 @@
 module Types
 
-export MPS, MPO, MPDO, DMRGEnv, DMRGOptions
+export MPS, MPO, DMRGEnv, DMRGOptions
 
 """
 Abstract supertype for tensor networks (MPS, MPO, MPDO, etc.)

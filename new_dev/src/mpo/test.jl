@@ -97,23 +97,6 @@ function build_mpo(
     return MPO{T}(tensors)
 end
 
-#build the mpo builder for spin boson
-function build_mpo(fsm::SpinBosonFSMPath;d::Integer=2,nmax::Integer=4,T::Type=Float64)
-    chi = fsm.chi
-    grid_bulk = zeros(T,chi-1,chi-1,d,d)
-    grid_L = zeros(T,1,chi-1,nmax+1,nmax+1)
-    phys_ops = merge(spin_ops(d),boson_ops(nmax))
-    for (row,col,opname,w) in fsm.transitions 
-        op_mat = phys_ops[opname]
-        if row == 0
-            grid_L[1,col,:,:] += w*op_mat
-        else
-            grid_bulk[row,col,:,:] += w*op_mat
-        end 
-    end
-    return grid_L, grid_bulk, reshape(grid_bulk[:,1,:,:],(chi-1,1,d,d))
-end
-
 # ————————————————————————————————————————————————————————————————
 # 2) Spin-boson MPO,
 # ————————————————————————————————————————————————————————————————

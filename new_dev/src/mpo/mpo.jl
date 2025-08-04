@@ -1,174 +1,142 @@
-using LinearAlgebra
+using LinearAlgebra 
 
-# Finite‑range coupling between i and i+dx
-struct FiniteRangeCoupling
-    op1::String
-    op2::String
-    dx::Int
-    weight::Float64
-end
+include(joinpath(@__DIR__, "fsm.jl"))
 
-# Exponential channel: A e^{-b r} coupling
-struct ExpChannelCoupling
-    op1::String
-    op2::String
-    amplitude::Float64
-    decay::Float64
-end
+# ————————————————————————————————————————————————————————————————
+# 1) Operator Factory
+# ————————————————————————————————————————————————————————————————
 
-struct Fields
-    op::String
-    weight::Float64
-end
+function spin_ops(d::Integer)
+    @assert d ≥ 1 "d must be ≥ 1"
+    # total spin S and its m‐values
+    S = (d - 1)/2
+    m_vals = collect(S:-1:-S)   # [S, S-1, …, -S]
 
-function power_law_to_exp(a::Float64,n::Integer,N::Integer)
+    # Sz is just diagonal of m_vals
+    Sz = Diagonal(m_vals)
 
-    """
-
-    function gives (x_i,lambda_i) such that
-
-    1/r^a = Sum_{i=1-->n} x_i * (lambda_i)^r + errors
-
-    a : interaction strength, a -> infinity is nearest neighbor Ising
-        a -> 0 is fully connected Ising.
-
-    n : number of exponential sums. Refer to SciPostPhys.12.4.126 appendix C
-        for further details.
-
-    N : lattice size.
-    """
-
-    F = Array{Float64,1}(undef,N)
-    @inbounds for k in 1:N
-        F[k] = 1/k^a
+    # Build S+ and S– by placing coef on the super/sub‐diagonal
+    Sp = zeros(Float64, d, d)
+    @inbounds for i in 1:d-1
+        m_lower = m_vals[i+1]   # THIS is the m of the state being raised
+        coef = sqrt((S - m_lower)*(S + m_lower + 1))
+        Sp[i, i+1] = coef
     end
+    Sm = Sp'  # adjoint
 
-    M = zeros(N-n+1,n)
-    @inbounds for j in 1:n
-        @inbounds for i in 1:N-n+1
-            M[i,j] = F[i+j-1]
-        end
-    end
+    # Now the cartesian components
+    Sx = (Sp + Sm)/2
+    Sy = (Sp - Sm) / (2im)
 
-    F1 = qr(M)
-    Q1 = F1.Q[1:N-n,1:n]
-    Q1_inv = pinv(Q1)
-    Q2 = F1.Q[2:N-n+1,1:n]
-    V = Q1_inv*Q2
-
-    lambda = real(eigvals(V))
-    lam_mat = zeros(N,n)
-    @inbounds for i in 1:length(lambda)
-        @inbounds for k in 1:N
-            lam_mat[k,i] = lambda[i]^k
-        end
-    end
-    x = lam_mat\F
-    return x, lambda
+    return Dict("X" => Sx,
+                "Y" => Sy, 
+                "Z" => Sz, 
+                "I" => Matrix{Float64}(I, d, d))
 end
 
-function spin_finite_state_machine(channels)
-    #start the finite state machine
-    num_states = 1
-    #allocate a vector of tuples for hosting transitions
-    transitions = Tuple{Int,Int,String,Float64}[]
-    #put identity at initial and final node 
-    push!(transitions, (1,1,"I", 1.0))
-    push!(transitions, (0,0,"I", 1.0)) # the final state is represented as 0
-
-    #loop over different coupling channels
-    for ch in channels
-        if ch isa FiniteRangeCoupling
-            num_states,transitions = two_site_finite_path(num_states,ch,transitions)
-        elseif ch isa ExpChannelCoupling
-            num_states,transitions = two_site_exp_channel_path(num_states,ch,transitions)
-        elseif ch isa Fields
-            num_states,transitions = single_site_field_path(num_states,ch,transitions)
-        end 
-    end 
-    return num_states+1, transitions 
-end
-
-#here coupling will be a struct so don't use it as a vector of tuples but as a struct, that way it is easier to call the arguments, for eg dx will be coupling.dx not coupling[3]
-function two_site_finite_path(num_states::Int,coupling::FiniteRangeCoupling,transitions::Vector{Tuple{Int64, Int64, String, Float64}})
-    path = num_states+1:num_states+coupling.dx
-    # idle → first state : emit op1
-    push!(transitions, (path[1],1, coupling.op1, 1.0))
-
-    # intermediate identity hops
-    for i in 2:length(path)
-        push!(transitions, (path[i], path[i-1], "I", 1.0))
+function boson_annihilator(nmax::Integer)
+    @assert nmax ≥ 0 "nmax must be non-negative"
+    dB = nmax + 1
+    A = zeros(Float64, dB, dB)
+    @inbounds for k in 1:nmax                 # super-diagonal entries
+        A[k, k+1] = sqrt(k)              # √k = √(n) with n=k
     end
-    # last state → final idle : emit op2
-    push!(transitions, (0,path[end], coupling.op2,coupling.weight))
-
-    return path[end], transitions
+    return A
 end
 
-function two_site_exp_channel_path(num_states::Int,coupling::ExpChannelCoupling,transitions::Vector{Tuple{Int64, Int64, String, Float64}})
-
-    path = num_states+1
-    # idle → first state : emit op1
-    push!(transitions,(path,1,coupling.op1,1.0))
-
-    # self‑loop with identity and decay 
-    push!(transitions, (path, path, "I",coupling.decay))
-
-    # last state → final idle : emit op2
-    push!(transitions, (0,path, coupling.op2,coupling.amplitude*coupling.decay))   
-
-    return path, transitions
+function boson_identity(nmax::Integer)
+    dB = nmax + 1
+    I = zeros(Float64, dB, dB)          # or zeros(n,n) if Float64 is fine
+    @inbounds for k in 1:dB                    # i ↔ n in the formula above
+        I[k, k] = 1.0          # diagonal entry
+    end
+    return I
 end 
 
-function single_site_field_path(num_states::Int,coupling::Fields,transitions::Vector{Tuple{Int64, Int64, String, Float64}})
-    push!(transitions,(0,1,coupling.op,coupling.weight))
-
-    return num_states, transitions
-end 
-
-# 2. Initialize empty grids
-function init_grids(chi::Int, d::Int,T::Type=Float64)
-    # 4D: (χ_in, χ_out, phys_in, phys_out)
-    return zeros(T, chi, chi, d, d)
+function boson_ops(nmax::Integer)
+    a    = boson_annihilator(nmax)
+    adag = a'
+    return Dict(
+      "a"    => a,
+      "adag" => adag,
+      "n"    => adag * a,
+      "Ib"   => boson_identity(nmax),
+    )
 end
 
-function populate_grids!(
-    grids::AbstractArray{G,4},
-    transitions::Vector{Tuple{Int,Int,String,W}},
-    phys_ops::Dict{String,Matrix},
-) where {G<:Number, W<:Number}
+# Your MPO type 
+abstract type TensorNetwork{T} end
+struct MPO{T} <: TensorNetwork{T}
+    tensors::Vector{Array{T,4}}
+end
 
-    chi = length(grids[:,1,1,1])
-    for (row,col,opname,w) in transitions 
+# ————————————————————————————————————————————————————————————————
+# 1) Pure-spin MPO
+# ————————————————————————————————————————————————————————————————
+function build_mpo(
+    fsm::SpinFSMPath;
+    N::Integer,
+    d::Integer = 2,
+    T::Type   = Float64,
+)
+    # operator factory
+    phys_ops = spin_ops(d)
+    chi        = fsm.chi
+
+    # build the bulk
+    bulk = zeros(T, chi, chi, d, d)
+    for (row,col,opname,w) in fsm.transitions 
         op_mat = phys_ops[opname]
-        grids[row==0 ? chi : row,col == 0 ? chi : col,:,:] = w*op_mat 
+        bulk[row==0 ? chi : row,col == 0 ? chi : col,:,:] += w*op_mat 
     end 
-    return grids 
+
+    # left / right boundaries
+    L = reshape(bulk[chi, :, :, :], (1, chi, d, d))
+    R = reshape(bulk[:, 1, :, :], (chi, 1, d, d))
+
+    # assemble N‐site MPO: [L, bulk, bulk, …, bulk, R]
+    mids = fill(bulk, N-2)        # N-2 copies of the central tensor
+    tensors = [L, mids..., R]     # vector of length N
+
+    return MPO{T}(tensors)
 end
 
-# --- Example usage ---
-sx = [0.0 1.0; 1.0 0.0]
-sy = [0.0 -1.0*im; 1.0*im  0.0]
-sz = [1.0 0.0; 0.0  -1.0]
-I2 = Matrix{Float64}(I, 2, 2)
+# ————————————————————————————————————————————————————————————————
+# 2) Spin-boson MPO,
+# ————————————————————————————————————————————————————————————————
+function build_mpo(
+    fsm::SpinBosonFSMPath;
+    N::Integer,
+    d::Integer    = 2,
+    nmax::Integer = 4,
+    T::Type       = Float64,
+)
+    chi   = fsm.chi
+    db  = nmax + 1
+    phys_ops = merge(spin_ops(d), boson_ops(nmax))
+    # build the “bulk” and left boundary
+    bulk  = zeros(T, chi-1, chi-1, d, d)
+    L     = zeros(T, 1, chi-1, db, db)
+    for (row,col,opname,w) in fsm.transitions 
+        op_mat = phys_ops[opname]
+        if row == 0
+            L[1,col,:,:] .+= w*op_mat
+        else
+            bulk[row,col,:,:] .+= w*op_mat
+        end 
+    end
 
-channels = [FiniteRangeCoupling("X", "X", 2,0.5),ExpChannelCoupling("Z", "Z",0.8, 0.5),Fields("Y",0.8)]
-ops = Dict("X"=>sx, "Y"=>sy, "Z"=>sz,"I"=>I2)
-chi, transitions = spin_finite_state_machine(channels)
-println(transitions)
+    # right boundary
+    R = reshape(bulk[:, 1, :, :], (chi-1, 1, d, d))
 
-#d = 2
-#grids = init_grids(chi,d,Float64)
-#mpo = populate_grids!(grids,transitions,ops)
+    # assemble N‐site MPO
+    mids    = fill(bulk, N-2)
+    tensors = [L, mids..., R]
 
-#channels = [
-#    FiniteRangeCoupling("X", "X", 1 ,1.0),    # X_i X_{i+1}
-#    FiniteRangeCoupling("Y", "Y",2,0.5),    # Y_i Y_{i+2}
-    # approximate 1/r^3 as 3 exponentials (example params)
-#    ExpChannelCoupling("Z", "Z",0.8, 0.5),
-#    ExpChannelCoupling("Z", "Z",0.8, 0.5),
-#    ExpChannelCoupling("Z", "Z",0.8, 0.5),
-#    Fields("Y",0.8)
-#]
+    return MPO{T}(tensors)
+end
+
+
+
 
 
