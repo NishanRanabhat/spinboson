@@ -1,4 +1,4 @@
-module Site
+module TNCodebase.Core.Site
 
 using LinearAlgebra 
 
@@ -116,6 +116,17 @@ function BosonSite(nmax::Int,n::Int,T=Float64)
     return BosonSite{T}(nmax,n,E.vectors[:,n+1])
 end
 
+# BosonSite already carries its |n⟩ vector
+function state_tensor(site::BosonSite{T}, ::Int) where T
+    reshape(site.Bvec,1,site.nmax+1,1)
+end
 
+# AxisSpinSite: use precomputed up/down
+function state_tensor(site::AxisSpinSite{T}, lbl::Symbol) where T
+    v = lbl==:up   ? site.up   :
+        lbl==:down ? site.down :
+        throw(ArgumentError("AxisSpinSite label must be :up/:down"))
+    reshape(v,1,site.d,1)
+end 
 
 end #module

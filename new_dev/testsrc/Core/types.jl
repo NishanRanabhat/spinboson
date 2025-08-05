@@ -1,5 +1,3 @@
-module TNCodebase.Core.Types
-
 export MPS, MPO, DMRGEnv, DMRGOptions
 
 """
@@ -44,5 +42,3 @@ struct DMRGOptions
   ctf::Float64
   local_dim::Int
 end
-
-end # module

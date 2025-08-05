@@ -1,23 +1,40 @@
 # Add src to LOAD_PATH and load the module
-
 using Revise
 using Test
 
-push!(LOAD_PATH, joinpath(@__DIR__, "..", "src"))
+push!(LOAD_PATH, joinpath(@__DIR__, "..", "testsrc"))
 
 # This both includes MyDMRG.jl and tells Revise to watch every file it pulls in
-includet(joinpath(@__DIR__, "..", "src", "TNCodebase.jl"))
+includet(joinpath(@__DIR__, "..", "testsrc", "TNCodebase.jl"))
 
 using .TNCodebase
 
-mps = MPS{Float64}([rand(2,2,2) for _ in 1:3])
-ops1 = spin_ops(2)
-ops2 = boson_ops(3)
+site1 = SpinSite(1/2,T=ComplexF64)
+site0 = BosonSite(4,T=ComplexF64)
 
-println(AxisSpinSite(:Z,2).up) 
-println(AxisSpinSite(:Z,2).down) 
+spin = fill(site1, 10)
+spinboson = vcat(site0,spin)
+labels = vcat(2,fill((:Z,1),10))
 
-println(AxisSpinSite(:X,2).up) 
-println(AxisSpinSite(:X,2).down) 
-println(BosonSite(3,1))
+mps1 = product_state(spinboson,labels)
+mps2 = random_state(spinboson,5)
+
+for i in 1:11
+    println(size(mps2.tensors[i]))
+end
+#bt = state_tensor(boson1,0)
+
+#println(size(bt))
+
+#st = state_tensor(spin1,(:X,1))
+#println(st[1,:,1])
+
+#sites = [BosonSite(4,2),AxisSpinSite(:Z,2),AxisSpinSite(:Z,2),AxisSpinSite(:Z,2)]
+#label = [:up,:up,:up]
+
+#mps = product_state(sites,label).tensors
+
+#println(size(mps[1]))
+
+#println(mps[1])
 

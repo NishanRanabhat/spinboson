@@ -1,74 +1,21 @@
+module MPObuilder
+
 using LinearAlgebra 
 
-include(joinpath(@__DIR__, "fsm.jl"))
+import TNCodebase.Core.Types: MPO
+import TNCodebase.Core.Fsm: SpinFSMPath, SpinBosonFSMPath
+import TNCodebase.Core.Site: spin_ops, boson_ops
 
-# ————————————————————————————————————————————————————————————————
-# 1) Operator Factory
-# ————————————————————————————————————————————————————————————————
+#include(joinpath(@__DIR__,"..","Core","types.jl"))
+#using .Types: MPO
 
-function spin_ops(d::Integer)
-    @assert d ≥ 1 "d must be ≥ 1"
-    # total spin S and its m‐values
-    S = (d - 1)/2
-    m_vals = collect(S:-1:-S)   # [S, S-1, …, -S]
+#include(joinpath(@__DIR__,"..","Core","fsm.jl"))
+#using .Fsm: SpinFSMPath,SpinBosonFSMPath
 
-    # Sz is just diagonal of m_vals
-    Sz = Diagonal(m_vals)
+#include(joinpath(@__DIR__,"..","Core","site.jl"))
+#using .Site: spin_ops, boson_ops 
 
-    # Build S+ and S– by placing coef on the super/sub‐diagonal
-    Sp = zeros(Float64, d, d)
-    @inbounds for i in 1:d-1
-        m_lower = m_vals[i+1]   # THIS is the m of the state being raised
-        coef = sqrt((S - m_lower)*(S + m_lower + 1))
-        Sp[i, i+1] = coef
-    end
-    Sm = Sp'  # adjoint
-
-    # Now the cartesian components
-    Sx = (Sp + Sm)/2
-    Sy = (Sp - Sm) / (2im)
-
-    return Dict("X" => Sx,
-                "Y" => Sy, 
-                "Z" => Sz, 
-                "I" => Matrix{Float64}(I, d, d))
-end
-
-function boson_annihilator(nmax::Integer)
-    @assert nmax ≥ 0 "nmax must be non-negative"
-    dB = nmax + 1
-    A = zeros(Float64, dB, dB)
-    @inbounds for k in 1:nmax                 # super-diagonal entries
-        A[k, k+1] = sqrt(k)              # √k = √(n) with n=k
-    end
-    return A
-end
-
-function boson_identity(nmax::Integer)
-    dB = nmax + 1
-    I = zeros(Float64, dB, dB)          # or zeros(n,n) if Float64 is fine
-    @inbounds for k in 1:dB                    # i ↔ n in the formula above
-        I[k, k] = 1.0          # diagonal entry
-    end
-    return I
-end 
-
-function boson_ops(nmax::Integer)
-    a    = boson_annihilator(nmax)
-    adag = a'
-    return Dict(
-      "a"    => a,
-      "adag" => adag,
-      "n"    => adag * a,
-      "Ib"   => boson_identity(nmax),
-    )
-end
-
-# Your MPO type 
-abstract type TensorNetwork{T} end
-struct MPO{T} <: TensorNetwork{T}
-    tensors::Vector{Array{T,4}}
-end
+export build_mpo
 
 # ————————————————————————————————————————————————————————————————
 # 1) Pure-spin MPO
@@ -136,6 +83,7 @@ function build_mpo(
     return MPO{T}(tensors)
 end
 
+end #module
 
 
 
