@@ -11,6 +11,9 @@ are found in https://doi.org/10.1016/j.aop.2019.167998
 using LinearAlgebra
 using TensorOperations
 
+export right_sweep_TDVP_onesite, left_sweep_TDVP_onesite,
+        right_sweep_TDVP_twosite, left_sweep_TDVP_twosite
+        
 function right_sweep_TDVP_onesite(dt,M,psi,Env,Ham,N::Integer,krydim_TDVP::Integer,d::Integer,close_cutoff::Number)
 
     """
@@ -103,7 +106,7 @@ function left_sweep_TDVP_onesite(dt,M,psi,Env,Ham,N::Integer,krydim_TDVP::Intege
     return M,psi,Env
 end
 
-function right_sweep_TDVP_twosite(dt,M,psi,Env,Ham,N::Integer,krydim_TDVP::Integer,d::Integer,chi_max::Integer,close_cutoff::Number,ctf_val::Number)
+function right_sweep_TDVP_twosite(M,psi,Env,Ham,N::Integer,arg_tdvp::TDVPOptions)#,krydim_TDVP::Integer,d::Integer,chi_max::Integer,close_cutoff::Number,ctf_val::Number)
 
     """
     dt : Trotter time step
@@ -118,6 +121,13 @@ function right_sweep_TDVP_twosite(dt,M,psi,Env,Ham,N::Integer,krydim_TDVP::Integ
     close_cutoff : cutoff to stop the Lanczos exponential.
     ctf_val : cutoff for the singular values in SVD.
     """
+
+    dt = arg_tdvp.dt
+    krydim_TDVP = arg_tdvp.krylov_dim
+    chi_max = arg_tdvp.chi_max
+    ctf_val = arg_tdvp.ctf
+    close_cutoff = arg_tdvp.close_ctf
+    d = arg_tdvp.local_dim
 
     for i in 1:N-1
 
@@ -139,14 +149,14 @@ function right_sweep_TDVP_twosite(dt,M,psi,Env,Ham,N::Integer,krydim_TDVP::Integ
             M = ExpLancz(M,MpoToMpsOneSite,(Env[i],Ham[i+1],Env[i+2],d),krydim_TDVP,-dt/2,close_cutoff,"MPS","real")
             M = reshape(M,(shp_M[1],shp_M[2],shp_M[3]))
 
-            Env[i+2] = nothing
-            psi[i+1] = nothing
+            #Env[i+2] = nothing
+            #psi[i+1] = nothing
         end
     end
     return M,psi,Env
 end
 
-function left_sweep_TDVP_twosite(dt,M,psi,Env,Ham,N::Integer,krydim_TDVP::Integer,d::Integer,chi_max::Integer,close_cutoff::Number,ctf_val::Number)
+function left_sweep_TDVP_twosite(M,psi,Env,Ham,N::Integer,arg_tdvp::TDVPOptions)#,krydim_TDVP::Integer,d::Integer,chi_max::Integer,close_cutoff::Number,ctf_val::Number)
 
     """
     dt : Trotter time step
@@ -161,6 +171,13 @@ function left_sweep_TDVP_twosite(dt,M,psi,Env,Ham,N::Integer,krydim_TDVP::Intege
     close_cutoff : cutoff to stop the Lanczos exponential.
     ctf_val : cutoff for the singular values in SVD.
     """
+
+    dt = arg_tdvp.dt
+    krydim_TDVP = arg_tdvp.krylov_dim
+    chi_max = arg_tdvp.chi_max
+    ctf_val = arg_tdvp.ctf
+    close_cutoff = arg_tdvp.close_ctf
+    d = arg_tdvp.local_dim
 
     for j in reverse(2:N)
 
@@ -192,8 +209,8 @@ function left_sweep_TDVP_twosite(dt,M,psi,Env,Ham,N::Integer,krydim_TDVP::Intege
 
             M = reshape(M,(shp_M[1],shp_M[2],shp_M[3]))
 
-            Env[j-2] = nothing
-            psi[j-1] = nothing
+            #Env[j-2] = nothing
+            #psi[j-1] = nothing
         end
     end
 

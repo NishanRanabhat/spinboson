@@ -18,10 +18,11 @@ include(joinpath(@__DIR__, "Algorithms", "tdvp.jl"))
 #        BosonOnlySB, FiniteRangeCouplingSB, ExpChannelCouplingSB, FieldSB, 
 #        build_path, SpinFSMPath,SpinBosonFSMPath, spin_FSM, spinboson_FSM, build_mpo, product_state,random_state
 
-export MPS,MPO,DMRGEnv,DMRGOptions, SpinSite,BosonSite,
+export MPS,MPO,DMRGEnv,DMRGOptions, TDVPOptions,SpinSite,BosonSite,
         FiniteRangeCoupling, ExpChannelCoupling,PowerLawCoupling,Field,
         BosonOnly, SpinBosonInteraction,build_path, SpinFSMPath,SpinBosonFSMPath, 
         build_FSM, build_mpo, product_state,random_state, Initialize,
-        right_sweep_DMRG_two_site, left_sweep_DMRG_two_site
+        right_sweep_DMRG_two_site, left_sweep_DMRG_two_site,
+        right_sweep_TDVP_twosite, left_sweep_TDVP_twosite
 
 end
