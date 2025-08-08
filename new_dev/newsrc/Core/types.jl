@@ -42,3 +42,16 @@ struct DMRGOptions
   ctf::Float64
   local_dim::Int
 end
+
+"""
+Options for TDVP sweeps (e.g. krylov dim, ctf, chi_max).
+"""
+struct TDVPOptions
+  dt::Float64
+  krylov_dim::Int
+  chi_max::Int
+  ctf::Float64
+  close_ctf::Float64
+  local_dim::Int
+end
+

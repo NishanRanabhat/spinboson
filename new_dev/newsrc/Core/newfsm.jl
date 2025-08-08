@@ -1,5 +1,9 @@
 using LinearAlgebra
 
+export FiniteRangeCoupling,ExpChannelCoupling,PowerLawCoupling,Field,
+        BosonOnly,SpinBosonInteraction,build_path,SpinFSMPath,SpinBosonFSMPath,
+        build_FSM
+
 # ──────────────────────────────────────────────────────────────────────────────
 # 1) Abstract hierarchy
 # ──────────────────────────────────────────────────────────────────────────────
@@ -58,6 +62,7 @@ Exponential two-spin coupling:
 struct PowerLawCoupling <: Spin
     op1::Symbol
     op2::Symbol
+    J::Float64
     alpha::Float64
     bondH::Int
     N::Int
@@ -139,13 +144,13 @@ end
 function build_path(ns::Int,coupling::PowerLawCoupling,
     transitions::Vector{Tuple{Int64, Int64, Symbol, Float64}})
 
-    nu, lambda = power_law_to_exp(coupling.alpha,coupling.bondH,coupling.N)
+    nu, lambda = _power_law_to_exp(coupling.alpha,coupling.bondH,coupling.N)
     path = ns+1 : ns+coupling.bondH
     #loop over the several exponential paths
     for i in 1:length(path)
         push!(transitions,(path[i],1,coupling.op1,1.0))
         push!(transitions,(path[i],path[i],:I,lambda[i]))
-        push!(transitions,(0,path[i],coupling.op2,nu[i]*lambda[i]))
+        push!(transitions,(0,path[i],coupling.op2,coupling.J*nu[i]*lambda[i]))
     end
     return path[end],transitions
 end
@@ -178,7 +183,7 @@ n : number of exponential sums. Refer to SciPostPhys.12.4.126 appendix C
 N : lattice size.
 """
 
-function power_law_to_exp(a::Float64,n::Integer,N::Integer)
+function _power_law_to_exp(a::Float64,n::Integer,N::Integer)
 
     F = Array{Float64,1}(undef,N)
     @inbounds for k in 1:N
@@ -293,9 +298,9 @@ function build_FSM(channels::Vector{<:Boson};ns=1) #ns=1 default value for a fre
     return SpinBosonFSMPath(final, transitions) 
 end
 
-spinchannel1 = [PowerLawCoupling(:X,:X,1.5,3,6),Field(:Z,3.0)]
-spinchannel2 = [Field(:X,2.0)]
-channel = [SpinBosonInteraction(spinchannel1,:Ib,1.0),SpinBosonInteraction(spinchannel2,:a,5.0),BosonOnly(:n,3.0)]
+#spinchannel1 = [PowerLawCoupling(:X,:X,1.5,3,6),Field(:Z,3.0)]
+#spinchannel2 = [Field(:X,2.0)]
+#channel = [SpinBosonInteraction(spinchannel1,:Ib,1.0),SpinBosonInteraction(spinchannel2,:a,5.0),BosonOnly(:n,3.0)]
 
-ch = build_FSM(channel)
-println(ch)
+#ch = build_FSM(channel)
+#println(ch.chi)
