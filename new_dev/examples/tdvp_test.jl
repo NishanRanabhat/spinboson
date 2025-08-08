@@ -1,5 +1,6 @@
 # Add src to LOAD_PATH and load the module
 using Revise
+using MKL
 using Test
 
 push!(LOAD_PATH, joinpath(@__DIR__, "..", "newsrc"))
@@ -26,8 +27,7 @@ define a state
 """
 
 labels = vcat(2,fill((:X,1),Ns))
-psi = product_state(spinboson,labels)
-
+psi = product_state(spinboson,labels).tensors
 
 """
 define a Hamiltonian, in this case we will illustrate LR Ising Dickie
@@ -58,3 +58,25 @@ Ham = build_mpo(fsm,N=Ns+1,d=2,nmax=nmax).tensors
 
 #initialize the environments
 M,new_psi,Env = Initialize(Ns+1,psi,Ham,"MPS")
+
+#run the dmrg sweeps as usual 
+dt = 0.02;
+krylov_dim = 14; #krylov dimension for DMRG sweeps
+chi_max = 256; #upper limit in auxilliary bond dimension
+ctf = 0.00000001 #cutoff for SVD truncation
+close_ctf = 0.000000001 #cutoff value in Lanczos exponential solver
+local_dim = 2
+
+arg_tdvp = TDVPOptions(dt,krylov_dim,chi_max,ctf,close_ctf,local_dim)
+
+function run_tdvp(M,new_psi,Env,Ham,Ns,arg_tdvp)
+    for i in 1:10 
+        M,new_psi,Env = right_sweep_TDVP_twosite(M,new_psi,Env,Ham,Ns+1,arg_tdvp)
+        M,new_psi,Env = left_sweep_TDVP_twosite(M,new_psi,Env,Ham,Ns+1,arg_tdvp)
+        println(i)
+    end
+end
+
+run_tdvp(M,new_psi,Env,Ham,Ns,arg_tdvp)
+
+
