@@ -25,11 +25,20 @@ struct MPO{T} <: TensorNetwork{T}
 end
 
 """
-Environment holds left and right boundary tensors for DMRG sweeps.
+An MPDO is a sequence of rank-4 tensors of element-type `T` representing operators.
 """
-struct DMRGEnv{T}
-  left::Vector{Array{T,3}}        # length N+1
-  right::Vector{Array{T,3}}
+struct MPDO{T} <: TensorNetwork{T}
+  tensors::Vector{Array{T,4}}
+end
+
+"""
+Environment holds boundary tensors for efficient contraction.
+env.tensors[i] represents the environment between sites i-1 and i.
+- env.tensors[1] is the left boundary
+- env.tensors[N+1] is the right boundary
+"""
+struct Environment{T}
+    tensors::Vector{Union{Array{T,3}, Nothing}}
 end
 
 """

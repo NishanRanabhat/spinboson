@@ -1,16 +1,16 @@
 using LinearAlgebra
 
-export FiniteRangeCoupling, ExpChannelCoupling, Field, BosonOnlySB, FiniteRangeCouplingSB, 
-        ExpChannelCouplingSB, FieldSB, build_path, SpinFSMPath,SpinBosonFSMPath, spin_FSM, spinboson_FSM
+export FiniteRangeCoupling,ExpChannelCoupling,PowerLawCoupling,Field,
+        BosonOnly,SpinBosonInteraction,build_path,SpinFSMPath,SpinBosonFSMPath,
+        build_FSM
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 1) Abstract hierarchy
 # ──────────────────────────────────────────────────────────────────────────────
 
 abstract type Channel end
-abstract type TwoSite    <: Channel end
-abstract type SingleSite <: Channel end
-
+abstract type Spin  <: Channel end
+abstract type Boson <: Channel end
 # ──────────────────────────────────────────────────────────────────────────────
 # 2) Pure-spin channel structs
 # ──────────────────────────────────────────────────────────────────────────────
@@ -24,7 +24,7 @@ Finite-range coupling between spins at sites i and i+dx:
 - `dx`         : distance between the spins  
 - `weight`     : coupling strength  
 """
-struct FiniteRangeCoupling <: TwoSite
+struct FiniteRangeCoupling <: Spin
     op1::Symbol
     op2::Symbol
     dx::Int
@@ -41,11 +41,31 @@ Exponential two-spin coupling:
 - `amplitude`  : overall prefactor  
 - `decay`      : base of the exponential  
 """
-struct ExpChannelCoupling <: TwoSite
+struct ExpChannelCoupling <: Spin
     op1::Symbol
     op2::Symbol
     amplitude::Float64
     decay::Float64
+end
+
+"""
+PowerLawCoupling(op1, op2, alpha, bondH, N)
+
+Exponential two-spin coupling:
+
+- coupling ∝ `1/r^alpha` at distance `r`  
+- `op1`, `op2` : operator names on the two spins  
+- `alpha`  : power of the power law  
+- `bondH`  : number of exponentials to approximate the power-law
+- `N`  : number of spins
+"""
+struct PowerLawCoupling <: Spin
+    op1::Symbol
+    op2::Symbol
+    J::Float64
+    alpha::Float64
+    bondH::Int
+    N::Int
 end
 
 """
@@ -56,7 +76,7 @@ Single-site field coupling:
 - `op`     : operator acting on the spin  
 - `weight` : field strength  
 """
-struct Field <: SingleSite
+struct Field <: Spin
     op::Symbol
     weight::Float64
 end
@@ -66,14 +86,14 @@ end
 # ──────────────────────────────────────────────────────────────────────────────
 
 """
-    BosonOnlySB(op, weight)
+    BosonOnly(op, weight)
 
 Boson-only channel (no spin leg):
 
 - `op`     : boson operator name  
 - `weight` : coupling strength  
 """
-struct BosonOnlySB <: SingleSite
+struct BosonOnly <: Boson
     op::Symbol
     weight::Float64
 end
@@ -82,47 +102,8 @@ end
 # 4) Spin-boson channel structs via composition
 # ──────────────────────────────────────────────────────────────────────────────
 
-"""
-    FiniteRangeCouplingSB(spin, boson_op, weight_boson)
-
-Finite-range spin-boson coupling:
-
-- `spin`         : a `FiniteRangeCoupling` for the spin–spin part  
-- `boson_op`     : boson operator name  
-- `weight_boson` : spin-boson coupling strength  
-"""
-struct FiniteRangeCouplingSB <: TwoSite
-    spin::FiniteRangeCoupling
-    boson_op::Symbol
-    weight_boson::Float64
-end
-
-"""
-    ExpChannelCouplingSB(spin, boson_op, weight_boson)
-
-Exponential spin-boson coupling:
-
-- `spin`         : an `ExpChannelCoupling` for the spin–spin part  
-- `boson_op`     : boson operator name  
-- `weight_boson` : spin-boson coupling strength  
-"""
-struct ExpChannelCouplingSB <: TwoSite
-    spin::ExpChannelCoupling
-    boson_op::Symbol
-    weight_boson::Float64
-end
-
-"""
-    FieldSB(field, boson_op, weight_boson)
-
-Single-site spin-boson field coupling:
-
-- `field`        : a `Field` for the spin part  
-- `boson_op`     : boson operator name  
-- `weight_boson` : spin-boson coupling strength  
-"""
-struct FieldSB <: SingleSite
-    spin::Field
+struct SpinBosonInteraction <: Boson
+    spin_channel::Vector{<:Spin}
     boson_op::Symbol
     weight_boson::Float64
 end
@@ -160,6 +141,20 @@ function build_path(ns::Int, coupling::ExpChannelCoupling,
     return path, transitions
 end
 
+function build_path(ns::Int,coupling::PowerLawCoupling,
+    transitions::Vector{Tuple{Int64, Int64, Symbol, Float64}})
+
+    nu, lambda = _power_law_to_exp(coupling.alpha,coupling.bondH,coupling.N)
+    path = ns+1 : ns+coupling.bondH
+    #loop over the several exponential paths
+    for i in 1:length(path)
+        push!(transitions,(path[i],1,coupling.op1,1.0))
+        push!(transitions,(path[i],path[i],:I,lambda[i]))
+        push!(transitions,(0,path[i],coupling.op2,coupling.J*nu[i]*lambda[i]))
+    end
+    return path[end],transitions
+end
+
 # for single‐site fields
 function build_path(ns::Int, coupling::Field,
     transitions::Vector{Tuple{Int64, Int64, Symbol, Float64}})
@@ -168,68 +163,56 @@ function build_path(ns::Int, coupling::Field,
     return ns, transitions
 end
 
-# ──────────────────────────────────────────────────────────────────────────────
-# 6) Spin-boson build path methods
-# ──────────────────────────────────────────────────────────────────────────────
-
-# for finite‐range couplings
-function build_path(ns::Int,coupling::FiniteRangeCouplingSB,
-    transitions::Vector{Tuple{Int64, Int64, Symbol, Float64}})
-    path = ns+1:ns+coupling.spin.dx
-    # idle → first state : emit op1
-    push!(transitions, (path[1],1, coupling.spin.op1, 1.0))
-    # intermediate identity hops
-    for i in 2:length(path)
-        push!(transitions, (path[i], path[i-1],:I, 1.0))
-    end
-    # last state → final spin idle : emit op2
-    push!(transitions, (path[end]+1,path[end], coupling.spin.op2,coupling.spin.weight))
-    #spin idle loop
-    push!(transitions,(path[end]+1,path[end]+1,:I,1.0))
-    #spin idle → end state: emit boson_op 
-    push!(transitions,(0,path[end]+1,coupling.boson_op,coupling.weight_boson))
-
-    return path[end]+1, transitions
-end
-
-# for exponential couplings
-function build_path(ns::Int,coupling::ExpChannelCouplingSB,
-    transitions::Vector{Tuple{Int64, Int64, Symbol, Float64}})
-
-    path = ns+1
-    # idle → first state : emit op1
-    push!(transitions,(path,1,coupling.spin.op1,1.0))
-    # self‑loop with identity and decay 
-    push!(transitions, (path, path, :I,coupling.spin.decay))
-    # last state → final spin idle : emit op2
-    push!(transitions, (path+1,path, coupling.spin.op2,
-            coupling.spin.amplitude*coupling.spin.decay))  
-    #spin idle loop 
-    push!(transitions,(path+1,path+1,:I,1.0))
-    #spin idle → end state: emit boson_op 
-    push!(transitions,(0,path+1,coupling.boson_op,
-            coupling.weight_boson))
-
-    return path+1, transitions
-end 
-
-# for single‐site field
-function build_path(ns::Int,coupling::FieldSB,transitions::Vector{Tuple{Int64, Int64, Symbol, Float64}})
-    path = ns+1
-    #idle → first spin idle : emit op
-    push!(transitions,(path,1,coupling.spin.op,coupling.spin.weight))
-    #spin idle loop
-    push!(transitions,(path,path,:I,1.0))
-    #spin idle → end state: emit boson_op
-    push!(transitions,(0,path,coupling.boson_op,coupling.weight_boson))
-
-    return path, transitions
-end 
-
 #for boson only field
-function build_path(ns::Int,coupling::BosonOnlySB,transitions::Vector{Tuple{Int64, Int64, Symbol, Float64}})
+function build_path(ns::Int,coupling::BosonOnly,transitions::Vector{Tuple{Int64, Int64, Symbol, Float64}})
     push!(transitions,(0,1,coupling.op,coupling.weight))
     return ns,transitions
+end
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 6) helper to convert power-law to sum of exponentials
+# ──────────────────────────────────────────────────────────────────────────────
+
+"""
+function gives (x_i,lambda_i) such that
+1/r^a = Sum_{i=1-->n} x_i * (lambda_i)^r + errors
+a : interaction strength, a -> infinity is nearest neighbor Ising
+    a -> 0 is fully connected Ising.
+n : number of exponential sums. Refer to SciPostPhys.12.4.126 appendix C
+    for further details.
+N : lattice size.
+"""
+
+function _power_law_to_exp(a::Float64,n::Integer,N::Integer)
+
+    F = Array{Float64,1}(undef,N)
+    @inbounds for k in 1:N
+        F[k] = 1/k^a
+    end
+
+    M = zeros(N-n+1,n)
+    @inbounds for j in 1:n
+        @inbounds for i in 1:N-n+1
+            M[i,j] = F[i+j-1]
+        end
+    end
+
+    F1 = qr(M)
+    Q1 = F1.Q[1:N-n,1:n]
+    Q1_inv = pinv(Q1)
+    Q2 = F1.Q[2:N-n+1,1:n]
+    V = Q1_inv*Q2
+
+    lambda = real(eigvals(V))
+    lam_mat = zeros(N,n)
+    @inbounds for i in 1:length(lambda)
+        @inbounds for k in 1:N
+            lam_mat[k,i] = lambda[i]^k
+        end
+    end
+
+    nu = lam_mat\F
+    return nu, lambda
 end
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -262,34 +245,54 @@ end
 # 6) Finite state Machine builder from paths
 # ──────────────────────────────────────────────────────────────────────────────
 
-#builds finite state machine from different channels
-function spin_FSM(channels::Vector{<:Channel})
-    #start the finite state machine with 1 as first idle
-    ns = 1
-    #allocate a vector of tuples for hosting transitions
-    transitions = Tuple{Int,Int,Symbol,Float64}[]
-    #put identity at first and final idle 
-    push!(transitions, (1,1,:I, 1.0))
-    push!(transitions, (0,0,:I, 1.0))
+#builds spin finite state machine from different channels
+function build_FSM(channels::Vector{<:Spin};ns=1) #ns=1 default value for a fresh FSM
 
-    #loop over different coupling channels and build transitions
+    transitions = Tuple{Int,Int,Symbol,Float64}[]
+    if ns == 1
+        push!(transitions, (1,1,:I,1.0))
+    end
+
+    push!(transitions, (0,0,:I,1.0))
+
     for ch in channels
         ns, transitions = build_path(ns, ch, transitions)
     end
-    return SpinFSMPath(ns+1, transitions)
+
+    final = ns + 1
+    transitions = [
+      (s == 0 ? final : s,
+       t == 0 ? final : t,
+       op, w)
+      for (s,t,op,w) in transitions
+    ]
+
+    return SpinFSMPath(final, transitions)
 end
 
-function spinboson_FSM(channels::Vector{<:Channel})
-    #start the finite state machine
-    ns = 1
+function build_FSM(channels::Vector{<:Boson};ns=1) #ns=1 default value for a fresh FSM
     #allocate a vector of tuples for hosting transitions
-    transitions = Tuple{Int,Int,Symbol,Float64}[]
-    #put identity at initial and final node 
-    push!(transitions, (1,1,:I, 1.0))
+    transitions = Tuple{Int,Int,Symbol,Float64}[] 
 
-    #loop over different coupling channels
     for ch in channels
-        ns, transitions = build_path(ns,ch,transitions)
+        if ch isa SpinBosonInteraction
+            spin_path = build_FSM(ch.spin_channel,ns=ns)
+            ns,spin_transitions = spin_path.chi, spin_path.transitions
+            transitions  = vcat(transitions,spin_transitions)
+            push!(transitions,(0,ns,ch.boson_op,ch.weight_boson))
+        elseif ch isa BosonOnly
+            ns,transitions = build_path(ns,ch,transitions)
+        end
     end 
-    return SpinBosonFSMPath(ns+1, transitions) 
+
+    final = ns + 1
+    transitions = [
+      (s == 0 ? final : s,
+       t == 0 ? final : t,
+       op, w)
+      for (s,t,op,w) in transitions
+    ]
+
+    return SpinBosonFSMPath(final, transitions) 
 end
+

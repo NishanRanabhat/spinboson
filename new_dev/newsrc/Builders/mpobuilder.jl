@@ -19,7 +19,7 @@ function build_mpo(
     bulk = zeros(T, chi, chi, d, d)
     for (row,col,opname,w) in fsm.transitions 
         op_mat = phys_ops[opname]
-        bulk[row==0 ? chi : row,col == 0 ? chi : col,:,:] += w*op_mat 
+        bulk[row,col,:,:] .+= w*op_mat 
     end 
 
     # left / right boundaries
@@ -51,7 +51,7 @@ function build_mpo(
     L     = zeros(T, 1, chi-1, db, db)
     for (row,col,opname,w) in fsm.transitions 
         op_mat = phys_ops[opname]
-        if row == 0
+        if row == chi
             L[1,col,:,:] .+= w*op_mat
         else
             bulk[row,col,:,:] .+= w*op_mat
