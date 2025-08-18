@@ -2,7 +2,7 @@
 using LinearAlgebra
 using TensorOperations
 
-export MPSState, MPDOState
+export MPSState
 
 # ============= State Types =============
 """

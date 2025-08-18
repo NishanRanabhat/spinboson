@@ -1,6 +1,8 @@
 using LinearAlgebra
 using TensorOperations
 
+export build_environment, update_left_environment, update_right_environment
+
 # ============= Basic Tensor Contractions =============
 """
     contract_left_environment(L::Array{T,3}, A::Array{T,3}, W::Array{T,4}) where T
