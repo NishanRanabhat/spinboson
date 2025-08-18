@@ -20,7 +20,7 @@ function _move_orthogonality_left(A_left::Array{T,3}, A_right::Array{T,3}; norma
     return A_left_new, A_right_new
 end
 
-function _move_orthogonality_right(A_left::Array{T,3}, A_right::Array{T,3}; normalize=true) where T
+function _move_orthogonality_right(A_left::Array{T,3}, A_left::Array{T,3}; normalize=true) where T
     left_index, center_index, right_index = size(A_left)
     
     # SVD of left tensor

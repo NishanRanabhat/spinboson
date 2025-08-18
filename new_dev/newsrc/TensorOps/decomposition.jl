@@ -1,9 +1,7 @@
 # TensorOps/decompositions.jl
 using LinearAlgebra
 
-#export svd_truncate  
-#normalize_tensor
-#export entropy, truncation_error
+export svd_truncate, entropy, truncation_error
 
 """
     svd_truncate(A::Matrix, chi_max::Int, cutoff::Float64)

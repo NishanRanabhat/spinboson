@@ -11,6 +11,8 @@ function build_mpo(
     d::Integer = 2,
     T::Type   = Float64,
 )
+
+    @assert N > 2 "System must have at least 3 sites"
     # operator factory
     phys_ops = spin_ops(d)
     chi        = fsm.chi
@@ -43,6 +45,9 @@ function build_mpo(
     nmax::Integer = 4,
     T::Type       = Float64,
 )
+
+    @assert N > 2 "System must have at least 3 sites"
+
     chi   = fsm.chi
     db  = nmax + 1
     phys_ops = merge(spin_ops(d), boson_ops(nmax))

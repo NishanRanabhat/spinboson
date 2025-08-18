@@ -2,8 +2,7 @@
 using LinearAlgebra
 using TensorOperations
 
-#export LanczosSolver, KrylovExponential, solve, evolve
-#export OneSiteEffectiveHamiltonian, TwoSiteEffectiveHamiltonian, ZeroSiteEffectiveHamiltonian
+export LanczosSolver, KrylovExponential, solve, evolve, OneSiteEffectiveHamiltonian, TwoSiteEffectiveHamiltonian, ZeroSiteEffectiveHamiltonian
 
 # ============= Effective Hamiltonian Types =============
 
@@ -244,58 +243,30 @@ end
 #Create effective Hamiltonians from state components
 """
 
-"""
 function OneSiteEffectiveHamiltonian(state::MPSState, site::Int)
     N = length(state.mps.tensors)
     return OneSiteEffectiveHamiltonian(
-        state.env.tensors[site-1 == 0 ? N+1 : site-1],
+        state.environment.tensors[site-1 == 0 ? N+1 : site-1],
         state.mpo.tensors[site],
-        state.env.tensors[site+1]
+        state.environment.tensors[site+1]
     )
 end
 
 function TwoSiteEffectiveHamiltonian(state::MPSState, site::Int)
     N = length(state.mps.tensors)
     return TwoSiteEffectiveHamiltonian(
-        state.env.tensors[site-1 == 0 ? N+1 : site-1],
+        state.environment.tensors[site-1 == 0 ? N+1 : site-1],
         state.mpo.tensors[site],
         state.mpo.tensors[site+1],
-        state.env.tensors[site+2]
+        state.environment.tensors[site+2]
     )
 end
 
 function ZeroSiteEffectiveHamiltonian(state::MPSState, site::Int)
     N = length(state.mps.tensors)
     return ZeroSiteEffectiveHamiltonian(
-        state.env.tensors[site == 0 ? N+1 : site],
-        state.env.tensors[site+1]
+        state.environment.tensors[site == 0 ? N+1 : site],
+        state.environment.tensors[site+1]
     )
 end
-"""
-L = rand(10,4,10)
-R = rand(10,4,10)
-W1 = rand(4,4,2,2)
-W2 = rand(4,4,2,2)
-d = 2
-psivec = rand(10*2*2*10)
-linfunct = MpoToMpsTwoSite
-functArgs = (L,W1,W2,R,d)
-krydim = 16
-maxit = 5
-object = "MPS"
-dt = 0.02
-close_cutoff = 0.0000001
-Heff = TwoSiteEffectiveHamiltonian{ComplexF64}(L,W1,W2,R)
-#Heff = OneSiteEffectiveHamiltonian(L,W1,R)
 
-#solver = LanczosSolver(krylov_dim=krydim, max_iter=maxit,tol=1e-12)
-solver = KrylovExponential(krylov_dim=krydim,tol=close_cutoff)
-
-#vec0,val0 = EigenLancz(psivec,linfunct,functArgs,krydim,maxit,object)
-#vec1,val1 = solve(solver,Heff,psivec)
-
-vec0 =  ExpLancz(psivec,linfunct,functArgs,krydim,dt,close_cutoff,"MPS","real")
-vec1 = evolve(solver,Heff,psivec,im*dt)
-
-#println(val0 == val1)
-println(vec0 == vec1)

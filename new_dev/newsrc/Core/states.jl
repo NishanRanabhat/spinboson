@@ -14,7 +14,7 @@ Contains the MPS, MPO, environment tensors, and orthogonality center information
 mutable struct MPSState{T}
     mps::MPS{T}
     mpo::MPO{T}
-    environment::Env{T}
+    environment::Environment{T}
     center::Int              # Current orthogonality center
     direction::Symbol        # Sweep direction (:left or :right)
 end
@@ -22,7 +22,7 @@ end
 # ============= Unified Constructors =============
 function MPSState(mps::MPS{T}, mpo::MPO{T}; center=1, direction=:right) where T
     mps_copy = deepcopy(mps)
-    canonicalize(mps_copy, center, direction)
+    canonicalize(mps_copy, center)
     env = build_environment(mps_copy, mpo, center)
     return MPSState(mps_copy, mpo, env, center, direction)
 end

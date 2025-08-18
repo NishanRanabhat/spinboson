@@ -70,7 +70,7 @@ end
 Update environment at site i by contracting from site i-1.
 Used when moving orthogonality center rightward.
 """
-function update_left_environment!(env::Environment, site::Int, mps_tensor::Array{T,3}, mpo_tensor::Array{T,4}) where T
+function update_left_environment(env::Environment, site::Int, mps_tensor::Array{T,3}, mpo_tensor::Array{T,4}) where T
     N = length(env.tensors) - 1  # Number of sites
     env.tensors[site] = contract_left_environment(
         env.tensors[site-1 == 0 ? N+1 : site-1], mps_tensor, mpo_tensor
@@ -83,7 +83,7 @@ end
 Update environment at site i by contracting from site i+1.
 Used when moving orthogonality center leftward.
 """
-function update_right_environment!(env::Environment, site::Int, mps_tensor::Array{T,3}, mpo_tensor::Array{T,4}) where T
+function update_right_environment(env::Environment, site::Int, mps_tensor::Array{T,3}, mpo_tensor::Array{T,4}) where T
     N = length(env.tensors) - 1  # Number of sites
     
     env.tensors[site] = contract_right_environment(
