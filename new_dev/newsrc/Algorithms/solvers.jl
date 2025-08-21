@@ -6,29 +6,24 @@ export LanczosSolver, KrylovExponential, solve, evolve, OneSiteEffectiveHamilton
 
 # ============= Effective Hamiltonian Types =============
 
-"""
-Effective Hamiltonian for one-site optimization in DMRG
-"""
-struct OneSiteEffectiveHamiltonian{T}
+# Abstract supertype
+abstract type EffectiveHamiltonian{T} end
+
+# Concrete subtypes
+struct OneSiteEffectiveHamiltonian{T} <: EffectiveHamiltonian{T}
     left_env::Array{T,3}
     mpo_tensor::Array{T,4}
     right_env::Array{T,3}
 end
 
-"""
-Effective Hamiltonian for two-site optimization in DMRG/TDVP
-"""
-struct TwoSiteEffectiveHamiltonian{T}
+struct TwoSiteEffectiveHamiltonian{T} <: EffectiveHamiltonian{T}
     left_env::Array{T,3}
     mpo_tensor1::Array{T,4}
     mpo_tensor2::Array{T,4}
     right_env::Array{T,3}
 end
 
-"""
-Effective Hamiltonian for zero-site (bond) optimization in TDVP
-"""
-struct ZeroSiteEffectiveHamiltonian{T}
+struct ZeroSiteEffectiveHamiltonian{T} <: EffectiveHamiltonian{T}
     left_env::Array{T,3}
     right_env::Array{T,3}
 end
@@ -121,7 +116,7 @@ end
 
 #Find the lowest eigenvalue and eigenvector of H using Lanczos algorithm.
 """
-function solve(solver::LanczosSolver, H, v_init::Vector{T}) where T
+function solve(solver::LanczosSolver, H::EffectiveHamiltonian, v_init::Vector{T}) where T
     # Handle zero initial vector
     if norm(v_init) == 0
         v_init = randn(T, length(v_init))
@@ -172,7 +167,7 @@ end
 #For real-time evolution use complex dt = -im*t, for imaginary time use real dt.
 """
 
-function evolve(solver::KrylovExponential, H, v_init::Vector{T}, dt::Number) where T
+function evolve(solver::KrylovExponential, H::EffectiveHamiltonian, v_init::Vector{T}, dt::Number) where T
     # Handle zero initial vector
     if norm(v_init) == 0
         v_init = randn(T, length(v_init))
@@ -214,7 +209,6 @@ function evolve(solver::KrylovExponential, H, v_init::Vector{T}, dt::Number) whe
             end
         end
     end
-    
     return v_norm * output_vec
 end
 
@@ -234,39 +228,5 @@ function _closeness(list1,list2,cutoff)
         end
     end
     return c
-end
-
-
-# ============= Helper Functions =============
-
-"""
-#Create effective Hamiltonians from state components
-"""
-
-function OneSiteEffectiveHamiltonian(state::MPSState, site::Int)
-    N = length(state.mps.tensors)
-    return OneSiteEffectiveHamiltonian(
-        state.environment.tensors[site-1 == 0 ? N+1 : site-1],
-        state.mpo.tensors[site],
-        state.environment.tensors[site+1]
-    )
-end
-
-function TwoSiteEffectiveHamiltonian(state::MPSState, site::Int)
-    N = length(state.mps.tensors)
-    return TwoSiteEffectiveHamiltonian(
-        state.environment.tensors[site-1 == 0 ? N+1 : site-1],
-        state.mpo.tensors[site],
-        state.mpo.tensors[site+1],
-        state.environment.tensors[site+2]
-    )
-end
-
-function ZeroSiteEffectiveHamiltonian(state::MPSState, site::Int)
-    N = length(state.mps.tensors)
-    return ZeroSiteEffectiveHamiltonian(
-        state.environment.tensors[site == 0 ? N+1 : site],
-        state.environment.tensors[site+1]
-    )
 end
 
