@@ -10,6 +10,8 @@ include(joinpath(@__DIR__, "Builders", "mpsbuilder.jl"))
 
 include(joinpath(@__DIR__, "TensorOps", "canonicalization.jl"))
 include(joinpath(@__DIR__, "TensorOps", "environment.jl"))
+include(joinpath(@__DIR__, "TensorOps", "decomposition.jl"))
+
 
 
 #include(joinpath(@__DIR__, "Utilities", "contraction.jl"))
@@ -24,9 +26,7 @@ export MPS,MPO,DMRGEnv,DMRGOptions, TDVPOptions,SpinSite,BosonSite,MPSState,
         FiniteRangeCoupling, ExpChannelCoupling,PowerLawCoupling,Field,
         BosonOnly, SpinBosonInteraction,build_path, SpinFSMPath,SpinBosonFSMPath, 
         build_FSM, build_mpo, product_state,random_state, canonicalize,is_left_orthogonal, 
-        is_right_orthogonal, is_orthogonal 
-        #Initialize,
-        #right_sweep_DMRG_two_site, left_sweep_DMRG_two_site,
-        #right_sweep_TDVP_twosite, left_sweep_TDVP_twosite
+        is_right_orthogonal, is_orthogonal, build_environment, update_left_environment, update_right_environment,
+        svd_truncate, entropy, truncation_error
 
 end

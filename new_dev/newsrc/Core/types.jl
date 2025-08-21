@@ -48,7 +48,7 @@ struct DMRGOptions
   krylov_dim::Int
   max_iter::Int
   chi_max::Int
-  ctf::Float64
+  cutoff::Float64
   local_dim::Int
 end
 
@@ -59,8 +59,8 @@ struct TDVPOptions
   dt::Float64
   krylov_dim::Int
   chi_max::Int
-  ctf::Float64
-  close_ctf::Float64
+  cutoff::Float64
+  close_cutoff::Float64
   local_dim::Int
 end
 

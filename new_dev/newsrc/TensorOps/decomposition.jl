@@ -20,7 +20,7 @@ function svd_truncate(A::Matrix{T}, chi_max::Int, cutoff::Float64) where T
     chi = min(chi_cut, chi_max, length(S_normalized))
 
     U = F.U[:, 1:chi]
-    S = S_normalized[1:chi] #F.S[1:chi] / norm(F.S[1:chi])
+    S = S_normalized[1:chi] 
     V = F.Vt[1:chi, :]
     
     return U, S, V
