@@ -1,6 +1,7 @@
 # Add src to LOAD_PATH and load the module
 using Revise
 using Test
+using MKL
 using LinearAlgebra
 
 using TensorOperations
@@ -18,7 +19,7 @@ Build the system a site at a time
 
 nmax = 6
 spin_site = SpinSite(1/2,T=ComplexF64) #define a spin 1/2 particle 
-boson_site = BosonSite(nmax,T=ComplexF64) #define a Boson awith nmax=4 
+boson_site = BosonSite(nmax,T=ComplexF64) #define a Boson awith nmax=nmax 
 
 #build the system by putting the boson at site 0 and spins at rest of the sites
 Ns = 10 #total spins
@@ -69,11 +70,27 @@ local_dim = 2
 arg_dmrg = DMRGOptions(krylov_dim,max_iter,chi_max,ctf,local_dim)
 
 function run_dmrg(M,new_psi,Env,Ham,Ns,arg_dmrg)
+
+    folderName = "DMRG_data"
+    mkpath(folderName)
+
     for i in 1:10 
+        state = Array{Any,1}(undef,N)
+
         M,new_psi,Env = right_sweep_DMRG_two_site(M,new_psi,Env,Ham,Ns+1,arg_dmrg);
         M,new_psi,Env = left_sweep_DMRG_two_site(M,new_psi,Env,Ham,Ns+1,arg_dmrg)
-        println(i)
-    end
+
+        state[1] = M
+
+        for j in 2:N
+            state[j] = psi[j]
+        end
+
+        if i == num_sweep_DMRG
+           filepath = @sprintf("%s/DMRG_MPS_N=%d_chi_max=%d_a=%1.2f_h=%1.2f_w=%1.2f_g=%1.2f.jld2",folderName,N,chi_max,alpha,h,w,g)
+           save(filepath, "data",state)
+           count = 0
+        end    end
 end
 
-run_dmrg(M,new_psi,Env,Ham,Ns,arg_dmrg)
+#run_dmrg(M,new_psi,Env,Ham,Ns,arg_dmrg)
