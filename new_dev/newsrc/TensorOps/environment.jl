@@ -1,7 +1,7 @@
 using LinearAlgebra
 using TensorOperations
 
-#export build_environment, update_left_environment, update_right_environment
+export build_environment, update_left_environment, update_right_environment
 
 # ============= Basic Tensor Contractions =============
 """

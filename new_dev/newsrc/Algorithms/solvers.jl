@@ -90,10 +90,9 @@ end
 struct LanczosSolver
     krylov_dim::Int
     max_iter::Int
-    tol::Float64
     
-    function LanczosSolver(; krylov_dim=4, max_iter=100, tol=1e-12)
-        new(krylov_dim, max_iter, tol)
+    function LanczosSolver(krylov_dim=4, max_iter=100)
+        new(krylov_dim, max_iter)
     end
 end
 
@@ -104,7 +103,7 @@ struct KrylovExponential
     krylov_dim::Int
     tol::Float64
     
-    function KrylovExponential(; krylov_dim=30, tol=1e-12)
+    function KrylovExponential(krylov_dim=30, tol=1e-12)
         new(krylov_dim, tol)
     end
 end

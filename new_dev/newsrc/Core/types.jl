@@ -1,4 +1,4 @@
-export MPS, MPO, DMRGEnv, DMRGOptions
+export MPS, MPO, Environment, DMRGOptions, TDVPOptions
 
 """
 Abstract supertype for tensor networks (MPS, MPO, MPDO, etc.)
@@ -45,8 +45,6 @@ end
 Options for DMRG sweeps (e.g. krylov dim, ctf, chi_max).
 """
 struct DMRGOptions
-  krylov_dim::Int
-  max_iter::Int
   chi_max::Int
   cutoff::Float64
   local_dim::Int
@@ -57,10 +55,8 @@ Options for TDVP sweeps (e.g. krylov dim, ctf, chi_max).
 """
 struct TDVPOptions
   dt::Float64
-  krylov_dim::Int
   chi_max::Int
   cutoff::Float64
-  close_cutoff::Float64
   local_dim::Int
 end
 
