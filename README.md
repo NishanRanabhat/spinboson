@@ -1,1 +1,1 @@
-The TensorNetwork project with additional feature incorporating the cavity boson coupled with spin chains. This will also be the project to update the old tensor network code to make it more modular by adding structs and leveraging multiple dispatch.h
+The TensorNetwork project with additional feature incorporating the cavity boson coupled with spin chains. This will also be the project to update the old tensor network code to make it more modular by adding structs and leveraging multiple dispatch.
